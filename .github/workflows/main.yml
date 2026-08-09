@@ -2,7 +2,7 @@ name: Build
 
 env:
   kernel_repository: yuan-shiguang/kernel_xiaomi_sdm845
-  kernel_branch: thirteen
+  kernel_branch: fourteen
   device: dipper
   clang_version: r416183b
   defconfig: |
