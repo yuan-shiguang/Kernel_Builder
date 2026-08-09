@@ -1,0 +1,212 @@
+name: Build
+
+env:
+  kernel_repository: yuan-shiguang/kernel_xiaomi_sdm845
+  kernel_branch: thirteen
+  device: dipper
+  clang_version: r416183b
+  defconfig: |
+    dipper_defconfig
+  kernel_patch: |
+    #backport-path-umount.patch
+  kernelsu_patch: |
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_rebuild:
+        description: "Allow Rebuild"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build kernel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Set env
+        run: |
+          if [[ "$clang_version" = "r"* ]] || [[ "$clang_version" = "latest" ]]; then
+              clang_type=aosp
+          else
+              clang_type=vanilla
+          fi
+          echo clang_type=$clang_type | tee -a $GITHUB_ENV
+
+          if [[ "$clang_version" = "latest" ]]; then
+              clang_version=$(curl -L https://android.googlesource.com/kernel/common/+/refs/heads/android-mainline/build.config.constants | grep -Eo 'r[0-9]{6}[a-z]?[0-9]?')
+              echo clang_version=$clang_version | tee -a $GITHUB_ENV
+          fi
+
+      - name: Install packages
+        run: |
+          sudo apt update
+          sudo apt install -y \
+              binutils-arm-linux-gnueabi \
+              binutils-aarch64-linux-gnu
+
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.kernel_repository }}
+          ref: ${{ env.kernel_branch }}
+          submodules: recursive
+
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          path: this-repo
+          submodules: recursive
+
+      - name: Get latest kernel commit id
+        run: |
+          echo kernel_commit_id=$(git rev-parse HEAD) | tee -a $GITHUB_ENV
+
+      - name: Merge defconfig
+        run: |
+          while read -r line; do
+              if [ -z "$line" ] || [[ "$line" == "#"* ]]; then
+                  continue
+              fi
+              echo "Merging defconfig: $line"
+              cat arch/arm64/configs/$line >>arch/arm64/configs/merged_defconfig
+          done <<<"$defconfig"
+
+      - name: Setup KernelSU
+        run: |
+          echo 'CONFIG_KPROBES=y' >>arch/arm64/configs/merged_defconfig
+          echo 'CONFIG_HAVE_KPROBES=y' >>arch/arm64/configs/merged_defconfig
+          echo 'CONFIG_KPROBE_EVENTS=y' >>arch/arm64/configs/merged_defconfig
+
+      - name: Apply kernel patch
+        run: |
+          while read -r line; do
+              if [ -z "$line" ] || [[ "$line" == "#"* ]]; then
+                  continue
+              fi
+              echo "Applying kernel patch: $line"
+              git apply "this-repo/patches/$line"
+          done <<<"$kernel_patch"
+
+      - name: "AOSP-Clang: Restore"
+        id: aosp_clang_restore
+        if: env.clang_type == 'aosp'
+        uses: actions/cache/restore@v4
+        with:
+          path: aosp-clang
+          key: aosp-clang-${{ env.clang_version }}
+
+      - name: "AOSP-Clang: Download"
+        id: aosp_clang_download
+        if: env.clang_type == 'aosp' && steps.aosp_clang_restore.outputs.cache-hit != 'true'
+        run: |
+          aosp_clang_branch=$(
+              case "$clang_version" in
+              r365631c ) echo android11-release;;
+              r383902 | r416183b) echo master-kernel-build-2021 ;;
+              r450784e) echo master-kernel-build-2022 ;;
+              r487747c) echo main-kernel-build-2023 ;;
+              *) echo main ;;
+              esac
+          )
+          mkdir -p aosp-clang
+          curl -L https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/$aosp_clang_branch/clang-$clang_version.tar.gz | tar xz -C aosp-clang
+
+      - name: "AOSP-Clang: Save"
+        id: aosp_clang_save
+        if: env.clang_type == 'aosp' && steps.aosp_clang_download.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: aosp-clang
+          key: aosp-clang-${{ env.clang_version }}
+
+      - name: "AOSP-Clang: Setup"
+        if: env.clang_type == 'aosp'
+        run: |
+          echo PATH=$(pwd)/aosp-clang/bin:$PATH | tee -a $GITHUB_ENV
+
+      - name: "Vanilla-Clang: Setup"
+        if: env.clang_type == 'vanilla'
+        run: |
+          curl -L https://apt.llvm.org/llvm.sh | sudo bash -s -- $clang_version
+          echo PATH=/usr/lib/llvm-$clang_version/bin:$PATH | tee -a $GITHUB_ENV
+
+      - name: export flags
+        run: |
+          echo flags=" \
+          O=out \
+          ARCH=arm64 \
+          LLVM=1 \
+          LLVM_IAS=1 \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          " | tee -a $GITHUB_ENV
+
+      - name: Make defconfig
+        run: |
+          make $flags merged_defconfig
+
+      - name: Make
+        run: |
+          make $flags -j$(nproc --all)
+
+      - name: AnyKernel3
+        run: |
+          curl -Lo AnyKernel3.zip https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip
+          unzip AnyKernel3.zip
+
+          cat >AnyKernel3-master/anykernel.sh <<EOF
+          properties() { '
+          kernel.string=$kernel_repository $kernel_branch with KernelSU $kernelsu_remote_version for $device
+          do.devicecheck=1
+          do.modules=0
+          do.cleanup=1
+          do.cleanuponabort=1
+          device.name1=$device
+          '; }
+
+          block=auto
+          is_slot_device=auto
+          ramdisk_compression=auto
+          patch_vbmeta_flag=auto
+
+          . tools/ak3-core.sh
+          split_boot
+          flash_boot
+          EOF
+
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3-master/
+          if [ -f out/arch/arm64/boot/dtbo.img ]; then
+              cp out/arch/arm64/boot/dtbo.img AnyKernel3-master/
+          fi
+
+          cd AnyKernel3-master
+          rm -rf .git* README.md
+          zip -r ../boot.zip *
+
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot
+          path: AnyKernel3-master/*
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.kernelsu_remote_version }}
+          body: |
+            Device:
+            ${{ env.device }}
+
+            Kernel:
+            https://github.com/${{ env.kernel_repository }}/tree/${{ env.kernel_commit_id }}
+
+            Branch:
+            ${{ env.kernel_branch }}
+
+            KernelSU:
+            https://github.com/tiann/KernelSU/releases/tag/${{ env.kernelsu_remote_version }}
+          files: |
+            boot.zip
