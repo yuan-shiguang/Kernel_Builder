@@ -7,6 +7,8 @@ env:
   clang_version: r416183b
   defconfig: |
     dipper_defconfig
+    vendor/xiaomi/dipper.config
+    vendor/xiaomi/mi845_defconfig
   kernel_patch: |
     #backport-path-umount.patch
   kernelsu_patch: |
