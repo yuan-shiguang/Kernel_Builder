@@ -1,10 +1,7 @@
-# KernelSU Action
+# ReSukiSU Action
 
-使用 Github Actions 编译集成 [KernelSU](https://github.com/tiann/KernelSU) 的内核
+使用 Github Actions 编译集成 [ReSukiSU](https://github.com/ReSukiSU/ReSukiSU) 的内核
 
-~~并定时检测 KernelSU 新版本，有则编译新内核~~
-
-非 GKI 内核的 KernelSU 永远停留在 v0.9.5
 
 ## 使用
 
@@ -20,9 +17,9 @@
 
 ## 参考配置
 
-本例：小米 8 (dipper) PixelExperience 14
+本例：小米 8 (dipper)
 
-<https://github.com/PixelExperience-Devices/kernel_xiaomi_sdm845/tree/fourteen>
+<https://github.com/yuan-shiguang/kernel_xiaomi_sdm845/tree/fourteen>
 
 ```yaml
 env:
