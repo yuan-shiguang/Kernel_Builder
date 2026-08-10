@@ -206,13 +206,8 @@ jobs:
             Device:
             ${{ env.device }}
 
-            Kernel:
-            https://github.com/${{ env.kernel_repository }}/tree/${{ env.kernel_commit_id }}
-
             Branch:
             ${{ env.kernel_branch }}
 
-            KernelSU:
-            https://github.com/tiann/KernelSU/releases/tag/${{ env.kernelsu_remote_version }}
           files: |
             boot.zip
