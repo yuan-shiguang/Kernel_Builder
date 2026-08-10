@@ -12,7 +12,6 @@ env:
   kernel_patch: |
     10_enable_susfs_for_ksu.patch
     50_add_susfs_in_kernel-4.19.patch
-  kernelsu_patch: |
 
 on:
   workflow_dispatch:
@@ -76,16 +75,21 @@ jobs:
               echo "Merging defconfig: $line"
               cat arch/arm64/configs/$line >>arch/arm64/configs/merged_defconfig
           done <<<"$defconfig"
-      - name: clone ReSukiSu
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
-          
+
       - name: Setup KernelSU
         run: |
+          # 下载 KernelSU 主源码到 kernel/ 目录
+          echo "Downloading KernelSU source..."
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          
+          # 添加内核配置
           echo 'CONFIG_KPROBES=y' >>arch/arm64/configs/merged_defconfig
           echo 'CONFIG_HAVE_KPROBES=y' >>arch/arm64/configs/merged_defconfig
           echo 'CONFIG_KPROBE_EVENTS=y' >>arch/arm64/configs/merged_defconfig
-
+          
+          # 验证 kernel/ 目录是否存在
+          ls -la kernel/ || echo "WARNING: kernel/ directory not found!"
+          
       - name: Apply kernel patch
         run: |
           while read -r line; do
@@ -93,7 +97,7 @@ jobs:
                   continue
               fi
               echo "Applying kernel patch: $line"
-              git apply "this-repo/patches/$line"
+              git apply --verbose "this-repo/patches/$line"
           done <<<"$kernel_patch"
 
       - name: "AOSP-Clang: Restore"
@@ -165,7 +169,7 @@ jobs:
 
           cat >AnyKernel3-master/anykernel.sh <<EOF
           properties() { '
-          kernel.string=$kernel_repository $kernel_branch with KernelSU $kernelsu_remote_version for $device
+          kernel.string=$kernel_repository $kernel_branch with KernelSU for $device
           do.devicecheck=1
           do.modules=0
           do.cleanup=1
