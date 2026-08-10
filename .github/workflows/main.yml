@@ -2,15 +2,16 @@ name: Build
 
 env:
   kernel_repository: yuan-shiguang/kernel_xiaomi_sdm845
-  kernel_branch: main
+  kernel_branch: dipper_4.19
   device: dipper
   clang_version: r416183b
   defconfig: |
-    dipper_defconfig
+    vndor/sdm845-perf_defconfig
+    vendor/xiaomi/sdm845-common.config
     vendor/xiaomi/dipper.config
-    vendor/xiaomi/mi845_defconfig
   kernel_patch: |
-    #backport-path-umount.patch
+    10_enable_susfs_for_ksu.patch
+    50_add_susfs_in_kernel-4.19.patch
   kernelsu_patch: |
 
 on:
@@ -75,7 +76,10 @@ jobs:
               echo "Merging defconfig: $line"
               cat arch/arm64/configs/$line >>arch/arm64/configs/merged_defconfig
           done <<<"$defconfig"
-
+      - name: clone ReSukiSu
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+          
       - name: Setup KernelSU
         run: |
           echo 'CONFIG_KPROBES=y' >>arch/arm64/configs/merged_defconfig
