@@ -78,17 +78,24 @@ jobs:
 
       - name: Setup KernelSU
         run: |
-          # 下载 KernelSU 主源码到 kernel/ 目录
-          echo "Downloading KernelSU source..."
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
-          
-          # 添加内核配置
-          echo 'CONFIG_KPROBES=y' >>arch/arm64/configs/merged_defconfig
-          echo 'CONFIG_HAVE_KPROBES=y' >>arch/arm64/configs/merged_defconfig
-          echo 'CONFIG_KPROBE_EVENTS=y' >>arch/arm64/configs/merged_defconfig
-          
-          # 验证 kernel/ 目录是否存在
-          ls -la kernel/ || echo "WARNING: kernel/ directory not found!"
+          # 1. 克隆 KernelSU 仓库到临时目录
+          echo "Cloning KernelSU repository..."
+          git clone --depth=1 https://github.com/tiann/KernelSU.git /tmp/KernelSU
+      
+          echo "Copying KernelSU kernel directory to the source root..."
+          cp -r /tmp/KernelSU/kernel ./
+      
+          echo "Verifying KernelSU core files..."
+          if [ -f "kernel/Kbuild" ] && [ -f "kernel/Kconfig" ]; then
+              echo "KernelSU kernel directory successfully placed."
+          else
+              echo "ERROR: KernelSU kernel directory placement failed!"
+              exit 1
+          fi
+      
+          echo 'CONFIG_KPROBES=y' >> arch/arm64/configs/merged_defconfig
+          echo 'CONFIG_HAVE_KPROBES=y' >> arch/arm64/configs/merged_defconfig
+          echo 'CONFIG_KPROBE_EVENTS=y' >> arch/arm64/configs/merged_defconfig
           
       - name: Apply kernel patch
         run: |
