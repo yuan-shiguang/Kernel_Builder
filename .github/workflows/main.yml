@@ -6,7 +6,7 @@ env:
   device: dipper
   clang_version: r416183b
   defconfig: |
-    vndor/sdm845-perf_defconfig
+    vendor/sdm845-perf_defconfig
     vendor/xiaomi/sdm845-common.config
     vendor/xiaomi/dipper.config
   kernel_patch: |
