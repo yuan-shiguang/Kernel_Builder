@@ -78,7 +78,6 @@ jobs:
 
       - name: Setup KernelSU
         run: |
-          # 1. 克隆 KernelSU 仓库到临时目录
           echo "Cloning KernelSU repository..."
           git clone --depth=1 https://github.com/tiann/KernelSU.git /tmp/KernelSU
       
@@ -104,7 +103,8 @@ jobs:
                   continue
               fi
               echo "Applying kernel patch: $line"
-              git apply --verbose "this-repo/patches/$line"
+              # 使用 patch 命令代替 git apply
+              patch -p1 --ignore-whitespace < "this-repo/patches/$line"
           done <<<"$kernel_patch"
 
       - name: "AOSP-Clang: Restore"
