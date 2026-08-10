@@ -103,8 +103,7 @@ jobs:
                   continue
               fi
               echo "Applying kernel patch: $line"
-              # 使用 patch 命令代替 git apply
-              patch -p1 --ignore-whitespace < "this-repo/patches/$line"
+              git apply --verbose --reject --whitespace=fix "this-repo/patches/$line"
           done <<<"$kernel_patch"
 
       - name: "AOSP-Clang: Restore"
@@ -212,7 +211,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.device }}-build-${{ github.run_number }}
+          tag_name: ${{ env.kernel_branch }}_$(date +'%Y%m%d%H%M%S')
           body: |
             Device:
             ${{ env.device }}
